@@ -27,6 +27,10 @@ const MIN_SIGNATURE_LENGTH: usize = 10;  // 最小有效签名长度
 const BACKGROUND_MODEL_LITE: &str = "gemini-2.5-flash-lite";  // For simple/lightweight tasks
 const BACKGROUND_MODEL_STANDARD: &str = "gemini-2.5-flash";   // For complex background tasks
 
+// ===== Jitter Configuration =====
+// Jitter helps prevent thundering herd problem in retry scenarios
+const JITTER_FACTOR: f64 = 0.2;  // ±20% jitter
+
 // ===== Thinking 块处理辅助函数 =====
 
 use crate::proxy::mappers::claude::models::{ContentBlock, Message, MessageContent};
@@ -157,6 +161,15 @@ fn remove_trailing_unsigned_thinking(blocks: &mut Vec<ContentBlock>) {
 
 // ===== 统一退避策略模块 =====
 
+/// Apply jitter to a delay value to prevent thundering herd
+/// Returns delay ± JITTER_FACTOR (e.g., 1000ms ± 20% = 800-1200ms)
+fn apply_jitter(delay_ms: u64) -> u64 {
+    use rand::Rng;
+    let jitter_range = (delay_ms as f64 * JITTER_FACTOR) as i64;
+    let jitter: i64 = rand::thread_rng().gen_range(-jitter_range..=jitter_range);
+    ((delay_ms as i64) + jitter).max(1) as u64
+}
+
 /// 重试策略枚举
 #[derive(Debug, Clone)]
 enum RetryStrategy {
@@ -236,43 +249,51 @@ async fn apply_retry_strategy(
         }
 
         RetryStrategy::FixedDelay(duration) => {
+            // Apply jitter to fixed delays to prevent synchronized retries
+            let base_ms = duration.as_millis() as u64;
+            let jittered_ms = apply_jitter(base_ms);
             info!(
-                "[{}] ⏱️  Retry with fixed delay: status={}, attempt={}/{}, waiting={}ms",
+                "[{}] ⏱️  Retry with fixed delay: status={}, attempt={}/{}, base={}ms, actual={}ms (jitter applied)",
                 trace_id,
                 status_code,
                 attempt + 1,
                 MAX_RETRY_ATTEMPTS,
-                duration.as_millis()
+                base_ms,
+                jittered_ms
             );
-            sleep(duration).await;
+            sleep(Duration::from_millis(jittered_ms)).await;
             true
         }
 
         RetryStrategy::LinearBackoff { base_ms } => {
-            let delay_ms = base_ms * (attempt as u64 + 1);
+            let calculated_ms = base_ms * (attempt as u64 + 1);
+            let jittered_ms = apply_jitter(calculated_ms);
             info!(
-                "[{}] ⏱️  Retry with linear backoff: status={}, attempt={}/{}, waiting={}ms",
+                "[{}] ⏱️  Retry with linear backoff: status={}, attempt={}/{}, base={}ms, actual={}ms (jitter applied)",
                 trace_id,
                 status_code,
                 attempt + 1,
                 MAX_RETRY_ATTEMPTS,
-                delay_ms
+                calculated_ms,
+                jittered_ms
             );
-            sleep(Duration::from_millis(delay_ms)).await;
+            sleep(Duration::from_millis(jittered_ms)).await;
             true
         }
 
         RetryStrategy::ExponentialBackoff { base_ms, max_ms } => {
-            let delay_ms = (base_ms * 2_u64.pow(attempt as u32)).min(max_ms);
+            let calculated_ms = (base_ms * 2_u64.pow(attempt as u32)).min(max_ms);
+            let jittered_ms = apply_jitter(calculated_ms);
             info!(
-                "[{}] ⏱️  Retry with exponential backoff: status={}, attempt={}/{}, waiting={}ms",
+                "[{}] ⏱️  Retry with exponential backoff: status={}, attempt={}/{}, base={}ms, actual={}ms (jitter applied)",
                 trace_id,
                 status_code,
                 attempt + 1,
                 MAX_RETRY_ATTEMPTS,
-                delay_ms
+                calculated_ms,
+                jittered_ms
             );
-            sleep(Duration::from_millis(delay_ms)).await;
+            sleep(Duration::from_millis(jittered_ms)).await;
             true
         }
     }
