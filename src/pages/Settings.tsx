@@ -278,6 +278,7 @@ function Settings() {
                                     <option value="ja">日本語</option>
                                     <option value="tr">Türkçe</option>
                                     <option value="vi">Tiếng Việt</option>
+                                    <option value="pt">Português</option>
                                 </select>
                             </div>
 

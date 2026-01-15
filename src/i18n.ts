@@ -8,6 +8,7 @@ import zhTW from "./locales/zh-TW.json";
 import ja from "./locales/ja.json";
 import tr from "./locales/tr.json";
 import vi from "./locales/vi.json";
+import pt from "./locales/pt.json";
 
 i18n
     // detect user language
@@ -43,6 +44,12 @@ i18n
             },
             "vi-VN": {
                 translation: vi,
+            },
+            pt: {
+                translation: pt,
+            },
+            "pt-BR": {
+                translation: pt,
             },
         },
         fallbackLng: "en",
