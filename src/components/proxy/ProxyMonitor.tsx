@@ -53,10 +53,6 @@ const LogTable: React.FC<LogTableProps> = ({
     return (
         <div
             className="flex-1 overflow-y-auto overflow-x-auto bg-white dark:bg-base-100"
-            style={{
-                minHeight: '200px',
-                maxHeight: 'calc(100vh - 320px)'
-            }}
         >
             <table className="table table-xs w-full">
                 <thead className="bg-gray-50 dark:bg-base-200 text-gray-500 sticky top-0 z-10">
